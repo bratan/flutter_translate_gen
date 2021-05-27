@@ -1,4 +1,4 @@
-﻿import 'package:build/build.dart';
+import 'package:build/build.dart';
 import 'package:flutter_translate_gen/flutter_translate_gen.dart';
 import 'package:source_gen/source_gen.dart';
 

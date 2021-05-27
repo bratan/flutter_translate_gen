@@ -1,4 +1,4 @@
-﻿import 'package:code_builder/code_builder.dart';
+import 'package:code_builder/code_builder.dart';
 import 'package:flutter_translate_annotations/flutter_translate_annotations.dart';
 import 'package:flutter_translate_gen/localized_item.dart';
 

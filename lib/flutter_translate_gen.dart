@@ -13,132 +13,118 @@ import 'package:flutter_translate_gen/localized_item.dart';
 import 'package:glob/glob.dart';
 import 'package:source_gen/source_gen.dart';
 
-class FlutterTranslateGen extends AnnotationGenerator<TranslateKeysOptions>
-{
-    static List<String> reservedKeys = const["0", "1", "else"];
+class FlutterTranslateGen extends AnnotationGenerator<TranslateKeysOptions> {
+  static List<String>? reservedKeys = const ["0", "1", "else"];
 
-    const FlutterTranslateGen();
+  const FlutterTranslateGen();
 
-    @override
-    Future<String> generateForAnnotatedElement(Element element, ConstantReader annotation, BuildStep buildStep) async
-    {
-        validateClass(element);
+  @override
+  Future<String?> generateForAnnotatedElement(
+      Element? element, ConstantReader? annotation, BuildStep? buildStep) async {
+    validateClass(element!);
 
-        final options = parseOptions(annotation);
+    final options = parseOptions(annotation!);
 
-        var className = element.name;
+    var className = element.name;
 
-        validateClassName(className);
+    validateClassName(className!);
 
-        List<LocalizedItem> translations;
+    List<LocalizedItem>? translations;
 
-        try
-        {
-            translations = await getKeyMap(buildStep, options);
-        }
-        on FormatException catch (_)
-        {
-            throw InvalidGenerationSourceError("Ths JSON format is invalid.");
-        }
-
-        final file = Library((lb) => lb..body.addAll([KeysClassGenerator.generateClass(options, translations, className)]));
-
-        final DartEmitter emitter = DartEmitter(allocator: Allocator.none);
-
-        return DartFormatter().format('${file.accept(emitter)}');
+    try {
+      translations = await getKeyMap(buildStep, options);
+    } on FormatException catch (_) {
+      throw InvalidGenerationSourceError("Ths JSON format is invalid.");
     }
 
-    TranslateKeysOptions parseOptions(ConstantReader annotation)
-    {
-        return TranslateKeysOptions(
-                path: annotation.peek("path")?.stringValue,
-                caseStyle: enumFromString(CaseStyle.values, annotation.peek("caseStyle").revive().accessor),
-                separator: annotation.peek("separator")?.stringValue);
+    final file =
+        Library((lb) => lb..body.addAll([KeysClassGenerator.generateClass(options!, translations!, className)]));
+
+    final DartEmitter emitter = DartEmitter(allocator: Allocator.none);
+
+    return DartFormatter().format('${file.accept(emitter)}');
+  }
+
+  TranslateKeysOptions? parseOptions(ConstantReader? annotation) {
+    return TranslateKeysOptions(
+        path: annotation!.peek("path")!.stringValue,
+        caseStyle: enumFromString(CaseStyle.values, annotation.peek("caseStyle")!.revive().accessor),
+        separator: annotation.peek("separator")!.stringValue);
+  }
+
+  Future<List<LocalizedItem>?> getKeyMap(BuildStep? step, TranslateKeysOptions? options) async {
+    Map<String, List<String>>? mapping = <String, List<String>>{};
+
+    final List<AssetId>? assets = await step!.findAssets(Glob(options!.path, recursive: true)).toList();
+
+    for (final AssetId entity in assets!) {
+      Map<String, dynamic>? jsonMap = json.decode(await step.readAsString(entity));
+
+      final Map<String, String>? translationMap = getTranslationMap(jsonMap);
+
+      translationMap!.forEach((String? key, String? value) => (mapping[key!] ??= <String>[]).add(value!));
     }
 
-    Future<List<LocalizedItem>> getKeyMap(BuildStep step, TranslateKeysOptions options) async
-    {
-        var mapping = <String, List<String>>{};
+    List<LocalizedItem>? translations = [];
 
-        var assets = await step.findAssets(Glob(options.path, recursive: true)).toList();
+    mapping.forEach((id, trans) => translations.add(LocalizedItem(id, trans, getKeyFieldName(id, options)!)));
 
-        for (var entity in assets)
-        {
-            Map<String, dynamic> jsonMap = json.decode(await step.readAsString(entity));
+    return translations;
+  }
 
-            var translationMap = getTranslationMap(jsonMap);
+  String? getKeyFieldName(String? key, TranslateKeysOptions? options) {
+    switch (options!.caseStyle) {
+      case CaseStyle.titleCase:
+        return Casing.titleCase(key!, separator: options.separator);
+      case CaseStyle.upperCase:
+        return Casing.upperCase(key!, separator: options.separator);
+      case CaseStyle.lowerCase:
+        return Casing.lowerCase(key!, separator: options.separator);
+      default:
+        return throw InvalidGenerationSourceError("Invalid CaseStyle specified: ${options.caseStyle.toString()}");
+    }
+  }
 
-            translationMap.forEach((key, value) => (mapping[key] ??= <String>[]).add(value));
-        }
+  Map<String, String>? getTranslationMap(Map<String, dynamic>? jsonMap, {String? parentKey}) {
+    final Map<String, String>? map = Map<String, String>();
 
-        List<LocalizedItem> translations = [];
+    for (final String? entry in jsonMap!.keys) {
+      String? key;
 
-        mapping.forEach((id, trans) => translations.add(LocalizedItem(id, trans, getKeyFieldName(id, options))));
+      if (reservedKeys!.contains(entry)) {
+        key = parentKey;
+      } else {
+        key = parentKey != null ? "$parentKey.$entry" : entry;
+      }
 
-        return translations;
+      if (key == null) continue;
+
+      var value = jsonMap[entry];
+
+      if (value is String) {
+        map!.putIfAbsent(key, () => value);
+      } else {
+        var entries = getTranslationMap(value, parentKey: key);
+
+        map!.addAll(entries!);
+      }
     }
 
-    String getKeyFieldName(String key, TranslateKeysOptions options)
-    {
-        switch(options.caseStyle)
-        {
-            case CaseStyle.titleCase: return Casing.titleCase(key,separator: options.separator);
-            case CaseStyle.upperCase: return Casing.upperCase(key,separator: options.separator);
-            case CaseStyle.lowerCase: return Casing.lowerCase(key,separator: options.separator);
-            default: return throw InvalidGenerationSourceError("Invalid CaseStyle specified: ${options.caseStyle.toString()}");
-        }
+    return map;
+  }
+
+  void validateClassName(String? className) {
+    if (!className!.startsWith("_\$")) {
+      throw InvalidGenerationSourceError(
+          "The annotated class name (currently '$className') must start with _\$. For example _\$Keys or _\$LocalizationKeys");
     }
+  }
 
-    Map<String, String> getTranslationMap(Map<String, dynamic> jsonMap, {String parentKey})
-    {
-        final map = Map<String, String>();
-
-        for(var entry in jsonMap.keys)
-        {
-            String key;
-
-            if(reservedKeys.contains(entry))
-            {
-                key = parentKey;
-            }
-            else
-            {
-                key = parentKey != null ? "$parentKey.$entry" : entry;
-            }
-
-            if(key == null) continue;
-
-            var value = jsonMap[entry];
-
-            if(value is String)
-            {
-                map.putIfAbsent(key, () => value);
-            }
-            else
-            {
-                var entries = getTranslationMap(value, parentKey: key);
-
-                map.addAll(entries);
-            }
-        }
-
-        return map;
+  void validateClass(Element? element) {
+    if (element is! ClassElement) {
+      throw InvalidGenerationSourceError(
+          "The annotated element is not a Class! TranslateKeyOptions should be used on Classes.",
+          element: element);
     }
-
-
-    void validateClassName(String className)
-    {
-        if(!className.startsWith("_\$"))
-        {
-            throw InvalidGenerationSourceError("The annotated class name (currently '$className') must start with _\$. For example _\$Keys or _\$LocalizationKeys");
-        }
-    }
-
-    void validateClass(Element element)
-    {
-        if (element is! ClassElement)
-        {
-            throw InvalidGenerationSourceError("The annotated element is not a Class! TranslateKeyOptions should be used on Classes.", element: element);
-        }
-    }
+  }
 }

@@ -1,11 +1,11 @@
 name: flutter_translate_gen
 description: Statically-typed localization keys generator for flutter_translate.
-version: 2.0.0
+version: 2.1.0
 homepage: https://leadcode.dev
 repository: https://github.com/bratan/flutter_translate_gen
 
 environment:
-  sdk: ">=2.5.0 <3.0.0"
+  sdk: '>=2.12.0 <3.0.0'
 
 dependencies:
   analyzer: ^1.5.0
@@ -21,3 +21,12 @@ dependencies:
 
 dev_dependencies:
   build_runner: ^2.0.1
+
+dependency_overrides:
+  dart_casing:
+    git:
+      url: https://github.com/McCrafterIV/dart_casing.git
+  dart_utils:
+    git:
+      url: https://github.com/McCrafterIV/dart_utils.git
+
